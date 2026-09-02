@@ -111,15 +111,6 @@ async function sendTelegram(message) {
   }
 }
 
-// Send Sound Alert (via Telegram)
-async function sendSoundAlert() {
-  try {
-    await sendTelegram('🔔 *NEW AIRDROP ALERT!* 🔔');
-  } catch (error) {
-    // Skip
-  }
-}
-
 // Get Social Links for Project
 async function getSocialLinks(protocol) {
   const links = {
@@ -301,23 +292,6 @@ async function isInBlacklist(name) {
   return isBlacklisted(name);
 }
 
-// Add to Blacklist
-async function addToBlacklist(name, reason) {
-  cache.set(`blacklist_${name}`, true, 86400);
-
-  if (db) {
-    try {
-      await db.collection('blacklist').insertOne({
-        name,
-        reason,
-        addedAt: new Date(),
-      });
-    } catch (error) {
-      // Skip
-    }
-  }
-}
-
 // Save Airdrop to Database
 async function saveAirdrop(airdrop) {
   if (db) {
@@ -399,9 +373,6 @@ async function getAirdrops() {
         teamCheck,
         profit,
       });
-
-      // Limit to 10
-      if (airdrops.length >= 10) break;
     }
 
     // Cache for 10 minutes
@@ -416,13 +387,13 @@ async function getAirdrops() {
 }
 
 // Format Single Airdrop Post (Enhanced)
-function formatAirdropPost(airdrop, index, total) {
+function formatAirdropPost(airdrop) {
   const socialLinks = airdrop.socialLinks;
   const profit = airdrop.profit;
   const contract = airdrop.contractCheck;
   const team = airdrop.teamCheck;
 
-  let message = `🎯 <b>AIRDROP ${index}/${total}</b>\n\n`;
+  let message = `🎯 <b>AIRDROP ALERT</b>\n\n`;
 
   message += `📌 <b>Project:</b> ${airdrop.name}\n`;
   message += `🔗 <b>Chain:</b> ${airdrop.chain}\n`;
@@ -482,77 +453,68 @@ function formatAirdropPost(airdrop, index, total) {
   return message;
 }
 
-// Send Airdrops One by One (Enhanced - Only Airdrop Posts)
-async function sendAirdropsOneByOne(airdrops) {
-  // Send each airdrop separately (with duplicate check)
-  for (let i = 0; i < airdrops.length; i++) {
-    const airdrop = airdrops[i];
-    const postKey = `post_${airdrop.name}`;
+// Queue System for Posts
+let postQueue = [];
+let isProcessingQueue = false;
 
-    // Skip if already sent in this scan
+// Add to Queue
+function addToQueue(type, data) {
+  postQueue.push({ type, data });
+  console.log(`📥 Added to queue: ${data.name} (Queue size: ${postQueue.length})`);
+}
+
+// Process Queue (one by one with 5 min delay)
+async function processQueue() {
+  if (isProcessingQueue || postQueue.length === 0) {
+    return;
+  }
+
+  isProcessingQueue = true;
+  console.log(`\n📤 Processing queue (${postQueue.length} items)...`);
+
+  while (postQueue.length > 0) {
+    const item = postQueue.shift();
+    const postKey = `${item.type}_${item.data.name}`;
+
+    // Skip if already sent
     if (sentPosts.has(postKey)) {
-      console.log(`⏭️ Skipping duplicate: ${airdrop.name}`);
+      console.log(`⏭️ Skipping duplicate: ${item.data.name}`);
       continue;
     }
 
-    const post = formatAirdropPost(airdrop, i + 1, airdrops.length);
+    let message;
+    if (item.type === 'airdrop') {
+      message = formatAirdropPost(item.data);
+    } else if (item.type === 'offer') {
+      message = formatInstantOfferMessage(item.data, 1, 1);
+    }
 
-    console.log(`📤 Sending ${i + 1}/${airdrops.length}: ${airdrop.name}`);
-    const sent = await sendTelegram(post);
+    console.log(`📤 Sending: ${item.data.name}`);
+    const sent = await sendTelegram(message);
 
-    // Mark as sent only if successful
     if (sent) {
       sentPosts.add(postKey);
-      await markClaimed(airdrop.name, { chain: airdrop.chain, tvl: airdrop.tvl });
+      await markClaimed(item.data.name, { type: item.type });
     }
 
-    // Save to database
-    await saveAirdrop(airdrop);
-
-    // Wait 2 seconds between posts (to avoid rate limit)
-    if (i < airdrops.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait 5 minutes between posts (if more items in queue)
+    if (postQueue.length > 0) {
+      console.log(`⏳ Waiting 5 minutes before next post... (${postQueue.length} remaining)`);
+      await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000));
     }
   }
+
+  isProcessingQueue = false;
+  console.log('✅ Queue processing complete!');
 }
 
-// Track sent posts (prevent duplicates in same scan)
+// Track sent posts (prevent duplicates)
 let sentPosts = new Set();
 
 // Scan lock (prevent multiple scans at same time)
 let isScanning = false;
 
-// Send Instant Offers One by One
-async function sendInstantOffersOneByOne(offers) {
-  for (let i = 0; i < offers.length; i++) {
-    const offer = offers[i];
-    const postKey = `offer_${offer.name}`;
-
-    // Skip if already sent in this scan
-    if (sentPosts.has(postKey)) {
-      console.log(`⏭️ Skipping duplicate offer: ${offer.name}`);
-      continue;
-    }
-
-    const post = formatInstantOfferMessage(offer, i + 1, offers.length);
-
-    console.log(`📤 Sending offer ${i + 1}/${offers.length}: ${offer.name}`);
-    const sent = await sendTelegram(post);
-
-    // Mark as sent only if successful
-    if (sent) {
-      sentPosts.add(postKey);
-      await markClaimed(offer.name, { type: offer.type, reward: offer.reward });
-    }
-
-    // Wait 2 seconds between posts (to avoid rate limit)
-    if (i < offers.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-}
-
-// Main Scan Function (Enhanced)
+// Main Scan Function
 async function scanAirdrops() {
   // Prevent multiple scans at same time
   if (isScanning) {
@@ -563,57 +525,59 @@ async function scanAirdrops() {
   isScanning = true;
   console.log('\n=== Scanning Airdrops & Instant Offers ===');
 
-  // Clear sent posts for new scan
-  sentPosts.clear();
-
   try {
     // Scan regular airdrops
     const airdrops = await getAirdrops();
     if (airdrops.length > 0) {
       console.log(`\n📋 Found ${airdrops.length} regular airdrops`);
-      await sendAirdropsOneByOne(airdrops);
+      for (const airdrop of airdrops) {
+        addToQueue('airdrop', airdrop);
+      }
     }
 
     // Scan instant offers
     const instantOffers = await getInstantOffers();
     if (instantOffers.length > 0) {
       console.log(`\n🎁 Found ${instantOffers.length} instant offers`);
-      await sendInstantOffersOneByOne(instantOffers);
+      for (const offer of instantOffers) {
+        addToQueue('offer', offer);
+      }
     }
 
     if (airdrops.length === 0 && instantOffers.length === 0) {
       console.log('No new airdrops or offers found');
-      await sendTelegram('No new airdrops or offers found. Next scan in 5 minutes.');
+      // Don't send any message - only post when there's something to share
     }
 
-    console.log('✅ Scan complete!');
+    console.log(`📊 Queue size: ${postQueue.length}`);
   } catch (error) {
     console.error('❌ Scan error:', error.message);
-    await sendTelegram(`❌ Scan error: ${error.message}`);
   } finally {
     isScanning = false;
   }
+
+  // Start processing queue if not already running
+  processQueue();
 }
 
-// Start Bot (Enhanced)
+// Start Bot
 async function startBot() {
   console.log('🚀 Crypto Airdrop Bot Starting...');
   console.log('⏰ Check interval: ' + CONFIG.checkInterval);
   console.log('🇮🇳 Indian projects: BLOCKED');
-  console.log('📤 Mode: One-by-One Posts');
+  console.log('📤 Mode: One-by-One Posts (5 min interval)');
   console.log('🗄️ Database: ' + (CONFIG.mongodbUri ? 'MongoDB' : 'Memory'));
 
   // Connect to database
   await connectDB();
 
   // Schedule regular scans (every 5 minutes)
-  // Use scheduled: false to prevent immediate run
   cron.schedule(CONFIG.checkInterval, scanAirdrops, {
     scheduled: true,
     timezone: "Asia/Dhaka"
   });
 
-  // Run first scan after 30 seconds (give time for cron to initialize)
+  // Run first scan after 30 seconds
   setTimeout(() => {
     console.log('🔄 Running initial scan...');
     scanAirdrops();
