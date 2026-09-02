@@ -330,6 +330,7 @@ async function getAirdrops() {
     const protocols = response.data || [];
 
     const airdrops = [];
+    let count = 0;
 
     for (const protocol of protocols) {
       // Filter conditions
@@ -373,6 +374,10 @@ async function getAirdrops() {
         teamCheck,
         profit,
       });
+
+      count++;
+      // Limit to 10 airdrops per scan
+      if (count >= 10) break;
     }
 
     // Cache for 10 minutes
