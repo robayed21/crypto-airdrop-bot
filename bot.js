@@ -557,7 +557,7 @@ async function scanAirdrops() {
   }
 
   // Start processing queue if not already running
-  processQueue();
+  await processQueue();
 }
 
 // Start Bot
