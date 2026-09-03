@@ -381,17 +381,97 @@ async function getAirdrops() {
   }
 }
 
+// Get How to Join Instructions based on Category
+function getHowToJoin(category) {
+  const instructions = {
+    'DEX': [
+      '1️⃣ Visit DEX Website',
+      '2️⃣ Swap tokens',
+      '3️⃣ Provide liquidity',
+      '4️⃣ Trade regularly',
+      '5️⃣ Wait for snapshot'
+    ],
+    'Lending': [
+      '1️⃣ Visit Lending Platform',
+      '2️⃣ Deposit tokens as collateral',
+      '3️⃣ Borrow tokens',
+      '4️⃣ Maintain position',
+      '5️⃣ Wait for distribution'
+    ],
+    'Liquid Staking': [
+      '1️⃣ Visit Staking Platform',
+      '2️⃣ Stake your tokens',
+      '3️⃣ Receive staked tokens',
+      '4️⃣ Hold position',
+      '5️⃣ Claim rewards'
+    ],
+    'Bridge': [
+      '1️⃣ Visit Bridge Platform',
+      '2️⃣ Connect wallet',
+      '3️⃣ Bridge tokens',
+      '4️⃣ Complete multiple bridges',
+      '5️⃣ Wait for eligibility'
+    ],
+    'CDP': [
+      '1️⃣ Visit CDP Platform',
+      '2️⃣ Deposit collateral',
+      '3️⃣ Mint stablecoins',
+      '4️⃣ Maintain healthy position',
+      '5️⃣ Wait for distribution'
+    ],
+    'Derivatives': [
+      '1️⃣ Visit Trading Platform',
+      '2️⃣ Connect wallet',
+      '3️⃣ Trade perpetuals',
+      '4️⃣ Reach trading volume',
+      '5️⃣ Wait for rewards'
+    ],
+    'Yield': [
+      '1️⃣ Visit Yield Platform',
+      '2️⃣ Deposit tokens',
+      '3️⃣ Farm yield',
+      '4️⃣ Compound rewards',
+      '5️⃣ Wait for airdrop'
+    ],
+    'Restaking': [
+      '1️⃣ Visit Restaking Platform',
+      '2️⃣ Stake ETH first',
+      '3️⃣ Restake tokens',
+      '4️⃣ Secure networks',
+      '5️⃣ Earn multiple rewards'
+    ],
+    'CeFi': [
+      '1️⃣ Visit Exchange',
+      '2️⃣ Create account',
+      '3️⃣ Complete KYC',
+      '4️⃣ Trade or hold tokens',
+      '5️⃣ Wait for distribution'
+    ],
+    'Default': [
+      '1️⃣ Visit Website',
+      '2️⃣ Connect Wallet',
+      '3️⃣ Complete Tasks',
+      '4️⃣ Follow Social Media',
+      '5️⃣ Wait for Distribution'
+    ]
+  };
+
+  return instructions[category] || instructions['Default'];
+}
+
 // Format Single Airdrop Post (Simple & Clean)
 function formatAirdropPost(airdrop) {
   const socialLinks = airdrop.socialLinks;
   const profit = airdrop.profit;
+  const howToJoin = getHowToJoin(airdrop.category);
 
   let message = `🎯 <b>AIRDROP ALERT</b>\n\n`;
 
   message += `📌 <b>${airdrop.name}</b>\n`;
   message += `🔗 Chain: ${airdrop.chain}\n`;
   message += `💰 TVL: $${Math.round(airdrop.tvl).toLocaleString()}\n`;
-  message += `📊 Category: ${airdrop.category || 'DeFi'}\n\n`;
+  message += `📊 Category: ${airdrop.category || 'DeFi'}\n`;
+  message += `📡 Source: DeFi Llama\n\n`;
 
   message += `📱 <b>Links:</b>\n`;
   if (socialLinks.website) {
@@ -411,11 +491,11 @@ function formatAirdropPost(airdrop) {
   message += `💰 <b>Profit Potential:</b>\n`;
   message += `📉 Low: $${profit.low} | 📊 Mid: $${profit.mid} | 📈 High: $${profit.high}\n\n`;
 
-  message += `✅ <b>How to Join:</b>\n`;
-  message += `1️⃣ Visit Website\n`;
-  message += `2️⃣ Connect Wallet\n`;
-  message += `3️⃣ Complete Tasks\n`;
-  message += `4️⃣ Wait for Distribution\n\n`;
+  message += `✅ <b>How to Join (${airdrop.category || 'DeFi'}):</b>\n`;
+  howToJoin.forEach(step => {
+    message += `${step}\n`;
+  });
+  message += `\n`;
 
   message += `⚠️ Indian Projects: BLOCKED`;
 

@@ -505,15 +505,68 @@ async function getInstantOffers() {
   return verifiedOffers;
 }
 
+// Get How to Join Instructions based on Type
+function getHowToJoin(type) {
+  const instructions = {
+    'faucet': [
+      '1️⃣ Visit faucet website',
+      '2️⃣ Enter wallet address',
+      '3️⃣ Complete captcha',
+      '4️⃣ Receive free tokens'
+    ],
+    'quest': [
+      '1️⃣ Visit quest platform',
+      '2️⃣ Connect wallet',
+      '3️⃣ Complete tasks',
+      '4️⃣ Claim reward'
+    ],
+    'bounty': [
+      '1️⃣ Visit bounty platform',
+      '2️⃣ Find programs',
+      '3️⃣ Report bugs',
+      '4️⃣ Earn rewards'
+    ],
+    'social': [
+      '1️⃣ Visit platform',
+      '2️⃣ Follow/like/retweet',
+      '3️⃣ Complete task',
+      '4️⃣ Claim reward'
+    ],
+    'content': [
+      '1️⃣ Visit writing platform',
+      '2️⃣ Write article',
+      '3️⃣ Publish content',
+      '4️⃣ Earn rewards'
+    ],
+    'community': [
+      '1️⃣ Join community',
+      '2️⃣ Complete tasks',
+      '3️⃣ Help members',
+      '4️⃣ Earn rewards'
+    ],
+    'Default': [
+      '1️⃣ Visit Website',
+      '2️⃣ Connect Wallet',
+      '3️⃣ Complete Tasks',
+      '4️⃣ Claim Reward'
+    ]
+  };
+
+  return instructions[type] || instructions['Default'];
+}
+
 // Format Instant Offer Message (Simple & Clean)
 function formatInstantOfferMessage(offer, index, total) {
+  const howToJoin = getHowToJoin(offer.type);
+
   let message = `🎁 <b>FREE OFFER</b>\n\n`;
 
   message += `📌 <b>${offer.name}</b>\n`;
   message += `🔗 Type: ${offer.type.toUpperCase()}\n`;
   message += `💰 Reward: ${offer.reward}\n`;
   message += `⏱️ Time: ${offer.time}\n`;
-  message += `⛓️ Chains: ${offer.chains?.join(', ') || 'Multiple'}\n\n`;
+  message += `⛓️ Chains: ${offer.chains?.join(', ') || 'Multiple'}\n`;
+  message += `📡 Source: Verified Platform\n\n`;
 
   message += `📱 <b>Links:</b>\n`;
   if (offer.social?.website) {
@@ -526,6 +579,12 @@ function formatInstantOfferMessage(offer, index, total) {
     message += ` | 💬 <a href="${offer.social.discord}">Discord</a>`;
   }
   message += `\n\n`;
+
+  message += `✅ <b>How to Join (${offer.type.toUpperCase()}):</b>\n`;
+  howToJoin.forEach(step => {
+    message += `${step}\n`;
+  });
+  message += `\n`;
 
   message += `✅ <b>100% FREE - No Investment</b>\n`;
   message += `🔍 Verified: ${offer.verification?.verified ? 'YES' : 'PENDING'}`;
