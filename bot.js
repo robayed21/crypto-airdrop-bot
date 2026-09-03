@@ -391,69 +391,43 @@ async function getAirdrops() {
   }
 }
 
-// Format Single Airdrop Post (Enhanced)
+// Format Single Airdrop Post (Simple & Clean)
 function formatAirdropPost(airdrop) {
   const socialLinks = airdrop.socialLinks;
   const profit = airdrop.profit;
-  const contract = airdrop.contractCheck;
-  const team = airdrop.teamCheck;
 
   let message = `🎯 <b>AIRDROP ALERT</b>\n\n`;
 
-  message += `📌 <b>Project:</b> ${airdrop.name}\n`;
-  message += `🔗 <b>Chain:</b> ${airdrop.chain}\n`;
-  message += `💰 <b>TVL:</b> $${Math.round(airdrop.tvl).toLocaleString()}\n`;
-  message += `📊 <b>Category:</b> ${airdrop.category || 'DeFi'}\n\n`;
+  message += `📌 <b>${airdrop.name}</b>\n`;
+  message += `🔗 Chain: ${airdrop.chain}\n`;
+  message += `💰 TVL: $${Math.round(airdrop.tvl).toLocaleString()}\n`;
+  message += `📊 Category: ${airdrop.category || 'DeFi'}\n\n`;
 
-  message += `━━━━━━━━━━━━━━━━━\n`;
-  message += `📱 <b>SOCIAL MEDIA LINKS:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
+  message += `📱 <b>Links:</b>\n`;
   if (socialLinks.website) {
-    message += `🌐 <b>Website:</b> <a href="${socialLinks.website}">Click Here</a>\n`;
+    message += `🌐 <a href="${socialLinks.website}">Website</a>`;
   }
   if (socialLinks.twitter) {
-    message += `🐦 <b>Twitter:</b> <a href="${socialLinks.twitter}">Follow</a>\n`;
+    message += ` | 🐦 <a href="${socialLinks.twitter}">Twitter</a>`;
   }
   if (socialLinks.discord) {
-    message += `💬 <b>Discord:</b> <a href="${socialLinks.discord}">Join</a>\n`;
+    message += ` | 💬 <a href="${socialLinks.discord}">Discord</a>`;
   }
   if (socialLinks.telegram) {
-    message += `📢 <b>Telegram:</b> <a href="${socialLinks.telegram}">Join</a>\n`;
+    message += ` | 📢 <a href="${socialLinks.telegram}">Telegram</a>`;
   }
-  if (socialLinks.github) {
-    message += `💻 <b>GitHub:</b> <a href="${socialLinks.github}">View</a>\n`;
-  }
+  message += `\n\n`;
 
-  message += `\n━━━━━━━━━━━━━━━━━\n`;
-  message += `🔍 <b>VERIFICATION:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
+  message += `💰 <b>Profit Potential:</b>\n`;
+  message += `📉 Low: $${profit.low} | 📊 Mid: $${profit.mid} | 📈 High: $${profit.high}\n\n`;
 
-  message += `📜 <b>Contract:</b> ${contract.audit}\n`;
-  message += `👥 <b>Team Public:</b> ${team.teamPublic ? '✅ Yes' : '❌ No'}\n`;
-  message += `💻 <b>GitHub Active:</b> ${team.githubActive ? '✅ Yes' : '❌ No'}\n`;
-  message += `🔒 <b>Audit Passed:</b> ${team.auditPassed ? '✅ Yes' : '⚠️ Unknown'}\n\n`;
-
-  message += `━━━━━━━━━━━━━━━━━\n`;
-  message += `💰 <b>PROFIT POTENTIAL:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
-  message += `📉 <b>Low:</b> $${profit.low}\n`;
-  message += `📊 <b>Mid:</b> $${profit.mid}\n`;
-  message += `📈 <b>High:</b> $${profit.high}\n\n`;
-
-  message += `━━━━━━━━━━━━━━━━━\n`;
   message += `✅ <b>How to Join:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
   message += `1️⃣ Visit Website\n`;
   message += `2️⃣ Connect Wallet\n`;
   message += `3️⃣ Complete Tasks\n`;
-  message += `4️⃣ Follow Social Media\n`;
-  message += `5️⃣ Wait for Distribution\n\n`;
+  message += `4️⃣ Wait for Distribution\n\n`;
 
-  message += `⚠️ <b>Indian Projects: BLOCKED</b>\n`;
-  message += `🔍 <b>Verified: ${contract.verified ? 'YES' : 'PENDING'}</b>`;
+  message += `⚠️ Indian Projects: BLOCKED`;
 
   return message;
 }

@@ -505,115 +505,30 @@ async function getInstantOffers() {
   return verifiedOffers;
 }
 
-// Format Instant Offer Message
+// Format Instant Offer Message (Simple & Clean)
 function formatInstantOfferMessage(offer, index, total) {
-  const verification = offer.verification;
+  let message = `🎁 <b>FREE OFFER</b>\n\n`;
 
-  let message = `🎁 <b>FREE OFFER ${index}/${total}</b>\n\n`;
+  message += `📌 <b>${offer.name}</b>\n`;
+  message += `🔗 Type: ${offer.type.toUpperCase()}\n`;
+  message += `💰 Reward: ${offer.reward}\n`;
+  message += `⏱️ Time: ${offer.time}\n`;
+  message += `⛓️ Chains: ${offer.chains?.join(', ') || 'Multiple'}\n\n`;
 
-  message += `📌 <b>Platform:</b> ${offer.name}\n`;
-  message += `🔗 <b>Type:</b> ${offer.type.toUpperCase()}\n`;
-  message += `💰 <b>Reward:</b> ${offer.reward}\n`;
-  message += `⏱️ <b>Time Required:</b> ${offer.time}\n`;
-  message += `⛓️ <b>Chains:</b> ${offer.chains?.join(', ') || 'Multiple'}\n`;
-  message += `💵 <b>Investment:</b> FREE (No cost)\n\n`;
-
-  message += `━━━━━━━━━━━━━━━━━\n`;
-  message += `📱 <b>SOCIAL MEDIA LINKS:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
+  message += `📱 <b>Links:</b>\n`;
   if (offer.social?.website) {
-    message += `🌐 <b>Website:</b> <a href="${offer.social.website}">Click Here</a>\n`;
+    message += `🌐 <a href="${offer.social.website}">Website</a>`;
   }
   if (offer.social?.twitter) {
-    message += `🐦 <b>Twitter:</b> <a href="${offer.social.twitter}">Follow</a>\n`;
+    message += ` | 🐦 <a href="${offer.social.twitter}">Twitter</a>`;
   }
   if (offer.social?.discord) {
-    message += `💬 <b>Discord:</b> <a href="${offer.social.discord}">Join</a>\n`;
+    message += ` | 💬 <a href="${offer.social.discord}">Discord</a>`;
   }
+  message += `\n\n`;
 
-  message += `\n━━━━━━━━━━━━━━━━━\n`;
-  message += `🔍 <b>PAYMENT VERIFICATION:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
-  message += `✅ <b>Status:</b> ${verification?.verified ? 'VERIFIED' : 'PENDING'}\n`;
-  message += `📊 <b>Confidence:</b> ${verification?.confidence || 0}%\n`;
-  message += `⚠️ <b>Risk Level:</b> ${verification?.riskLevel || 'UNKNOWN'}\n`;
-  message += `💵 <b>Payout Likelihood:</b> ${verification?.payoutLikelihood || 0}%\n\n`;
-
-  message += `━━━━━━━━━━━━━━━━━\n`;
-  message += `✅ <b>VERIFICATION CHECKS:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
-  if (verification?.checks) {
-    const checks = verification.checks;
-    message += `🏢 <b>Platform Reputation:</b> ${checks.platformReputation ? '✅ Yes' : '❌ No'}\n`;
-    message += `💰 <b>Clear Reward:</b> ${checks.clearReward ? '✅ Yes' : '❌ No'}\n`;
-    message += `🚫 <b>No Upfront Payment:</b> ${checks.noUpfrontPayment ? '✅ Yes' : '❌ No'}\n`;
-    message += `📱 <b>Active Social:</b> ${checks.activeSocial ? '✅ Yes' : '❌ No'}\n`;
-    message += `💸 <b>Known Payouts:</b> ${checks.knownPayouts ? '✅ Yes' : '❌ No'}\n`;
-    message += `📋 <b>Transparent Terms:</b> ${checks.transparentTerms ? '✅ Yes' : '❌ No'}\n\n`;
-  }
-
-  message += `━━━━━━━━━━━━━━━━━\n`;
-  message += `✅ <b>HOW TO EARN:</b>\n`;
-  message += `━━━━━━━━━━━━━━━━━\n\n`;
-
-  switch (offer.type) {
-    case 'faucet':
-      message += `1️⃣ Visit the faucet website\n`;
-      message += `2️⃣ Enter your wallet address\n`;
-      message += `3️⃣ Complete captcha/verification\n`;
-      message += `4️⃣ Receive testnet tokens\n`;
-      message += `5️⃣ Use tokens on testnet dApps\n`;
-      message += `\n💡 <b>Guaranteed payout! 100% FREE!</b>`;
-      break;
-    case 'bounty':
-      message += `1️⃣ Visit the bounty platform\n`;
-      message += `2️⃣ Find active bounty programs\n`;
-      message += `3️⃣ Read the rules carefully\n`;
-      message += `4️⃣ Find and report vulnerabilities\n`;
-      message += `5️⃣ Claim reward upon verification\n`;
-      message += `\n💡 <b>Skill-based - higher rewards! 100% FREE!</b>`;
-      break;
-    case 'quest':
-      message += `1️⃣ Visit the quest platform\n`;
-      message += `2️⃣ Connect your wallet\n`;
-      message += `3️⃣ Complete the quest tasks\n`;
-      message += `4️⃣ Verify task completion\n`;
-      message += `5️⃣ Claim your reward\n`;
-      message += `\n💡 <b>Task-based - guaranteed payout! 100% FREE!</b>`;
-      break;
-    case 'social':
-      message += `1️⃣ Visit the platform\n`;
-      message += `2️⃣ Complete social media tasks\n`;
-      message += `3️⃣ Follow/like/retweet\n`;
-      message += `4️⃣ Verify task completion\n`;
-      message += `5️⃣ Claim your reward\n`;
-      message += `\n💡 <b>Social tasks - easy money! 100% FREE!</b>`;
-      break;
-    case 'content':
-      message += `1️⃣ Visit the writing platform\n`;
-      message += `2️⃣ Create quality content\n`;
-      message += `3️⃣ Publish your article\n`;
-      message += `4️⃣ Share on social media\n`;
-      message += `5️⃣ Earn from your writing\n`;
-      message += `\n💡 <b>Content creation - earn by writing! 100% FREE!</b>`;
-      break;
-    case 'community':
-      message += `1️⃣ Join the community\n`;
-      message += `2️⃣ Complete community tasks\n`;
-      message += `3️⃣ Help other members\n`;
-      message += `4️⃣ Verify task completion\n`;
-      message += `5️⃣ Claim your reward\n`;
-      message += `\n💡 <b>Community participation - earn by helping! 100% FREE!</b>`;
-      break;
-  }
-
-  message += `\n\n⚠️ <b>Indian Projects: BLOCKED</b>\n`;
-  message += `🔍 <b>Verified: ${verification?.verified ? 'YES' : 'PENDING'}</b>\n`;
-  message += `📊 <b>Confidence: ${verification?.confidence || 0}%</b>\n`;
-  message += `💵 <b>Investment Required: NONE (100% FREE)</b>`;
+  message += `✅ <b>100% FREE - No Investment</b>\n`;
+  message += `🔍 Verified: ${offer.verification?.verified ? 'YES' : 'PENDING'}`;
 
   return message;
 }
