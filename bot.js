@@ -459,16 +459,45 @@ function getHowToJoin(category) {
   return instructions[category] || instructions['Default'];
 }
 
+// Get Country/Region based on Chain
+function getCountry(chain) {
+  const chainCountries = {
+    'Ethereum': 'Global (USA/EU)',
+    'Bitcoin': 'Global (USA)',
+    'Solana': 'Global (USA)',
+    'Arbitrum': 'Global (USA/EU)',
+    'Optimism': 'Global (USA/EU)',
+    'Base': 'Global (USA)',
+    'Polygon': 'India (BLOCKED)',
+    'BSC': 'Global (Singapore)',
+    'Avalanche': 'Global (USA)',
+    'Fantom': 'Global (South Korea)',
+    'Cronos': 'Global (Australia)',
+    'Near': 'Global (Switzerland)',
+    'Cosmos': 'Global (Switzerland)',
+    'Cardano': 'Global (Japan/UK)',
+    'Polkadot': 'Global (Germany)',
+    'Tron': 'Global (Singapore)',
+    'OKX Chain': 'Global (Seychelles)',
+    'Sui': 'Global (USA)',
+    'Aptos': 'Global (USA)',
+  };
+
+  return chainCountries[chain] || 'Global (Unknown)';
+}
+
 // Format Single Airdrop Post (Simple & Clean)
 function formatAirdropPost(airdrop) {
   const socialLinks = airdrop.socialLinks;
   const profit = airdrop.profit;
   const howToJoin = getHowToJoin(airdrop.category);
+  const country = getCountry(airdrop.chain);
 
   let message = `🎯 <b>AIRDROP ALERT</b>\n\n`;
 
   message += `📌 <b>${airdrop.name}</b>\n`;
   message += `🔗 Chain: ${airdrop.chain}\n`;
+  message += `🌍 Country: ${country}\n`;
   message += `💰 TVL: $${Math.round(airdrop.tvl).toLocaleString()}\n`;
   message += `📊 Category: ${airdrop.category || 'DeFi'}\n`;
   message += `📡 Source: DeFi Llama\n\n`;
