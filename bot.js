@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const NodeCache = require('node-cache');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const { getInstantOffers, formatInstantOfferMessage } = require('./offers');
+const { getAllAirdrops } = require('./sources');
 require('dotenv').config();
 
 // Configuration
@@ -12,7 +13,47 @@ const CONFIG = {
   checkInterval: process.env.CHECK_INTERVAL || '*/5 * * * *',
   mongodbUri: process.env.MONGODB_URI,
   etherscanApiKey: process.env.ETHERSCAN_API_KEY,
+  // Custom Filters (user-configurable via .env / Railway Variables)
+  minTvl: parseInt(process.env.MIN_TVL) || 100000,
+  minReward: parseInt(process.env.MIN_REWARD) || 0,
+  allowedChains: process.env.ALLOWED_CHAINS ? process.env.ALLOWED_CHAINS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : null,
+  allowedTypes: process.env.ALLOWED_TYPES ? process.env.ALLOWED_TYPES.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : null,
+  blockedKeywords: process.env.BLOCKED_KEYWORDS ? process.env.BLOCKED_KEYWORDS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [],
+  maxRiskLevel: process.env.MAX_RISK_LEVEL || null, // e.g. 'MEDIUM' = only LOW & VERY LOW allowed
+  enableMoreSources: process.env.ENABLE_MORE_SOURCES !== 'false', // true by default
+  dailySummaryTime: process.env.DAILY_SUMMARY_TIME || '09:00',
+  dailySummaryEnabled: process.env.DAILY_SUMMARY_ENABLED !== 'false',
 };
+
+// Daily Stats Tracking
+let dailyStats = {
+  date: new Date().toDateString(),
+  scanned: 0,
+  verified: 0,
+  queued: 0,
+  sent: 0,
+  blocked: 0,
+  skipped: 0,
+  sourcesUsed: [],
+  startTime: new Date(),
+};
+
+function resetDailyStatsIfNewDay() {
+  const today = new Date().toDateString();
+  if (dailyStats.date !== today) {
+    dailyStats = {
+      date: today,
+      scanned: 0,
+      verified: 0,
+      queued: 0,
+      sent: 0,
+      blocked: 0,
+      skipped: 0,
+      sourcesUsed: [],
+      startTime: new Date(),
+    };
+  }
+}
 
 // Cache System (24 hour TTL for tracking)
 const cache = new NodeCache({ stdTTL: 86400 });
@@ -72,6 +113,102 @@ function isIndianProject(name) {
 function isBlacklisted(name) {
   const lower = (name || '').toLowerCase();
   return BLACKLIST.some(item => lower.includes(item));
+}
+
+// Custom Filter Check (user-configurable)
+function passesCustomFilter(airdrop) {
+  // Check MIN_TVL
+  if (airdrop.tvl && airdrop.tvl < CONFIG.minTvl) {
+    console.log(`   🚫 Filtered by MIN_TVL: ${airdrop.name} ($${airdrop.tvl} < $${CONFIG.minTvl})`);
+    return false;
+  }
+
+  // Check ALLOWED_CHAINS
+  if (CONFIG.allowedChains && CONFIG.allowedChains.length > 0) {
+    const chain = (airdrop.chain || '').toLowerCase();
+    const chains = (airdrop.chains || [airdrop.chain]).map(c => (c || '').toLowerCase());
+    const matches = CONFIG.allowedChains.some(allowed => 
+      chain.includes(allowed) || chains.some(c => c.includes(allowed))
+    );
+    if (!matches) {
+      console.log(`   🚫 Filtered by ALLOWED_CHAINS: ${airdrop.name} (${airdrop.chain})`);
+      return false;
+    }
+  }
+
+  // Check ALLOWED_TYPES / Category
+  if (CONFIG.allowedTypes && CONFIG.allowedTypes.length > 0) {
+    const type = (airdrop.type || '').toLowerCase();
+    const category = (airdrop.category || '').toLowerCase();
+    const matches = CONFIG.allowedTypes.some(allowed => 
+      type.includes(allowed) || category.includes(allowed)
+    );
+    if (!matches) {
+      console.log(`   🚫 Filtered by ALLOWED_TYPES: ${airdrop.name} (${airdrop.category}/${airdrop.type})`);
+      return false;
+    }
+  }
+
+  // Check BLOCKED_KEYWORDS
+  if (CONFIG.blockedKeywords && CONFIG.blockedKeywords.length > 0) {
+    const name = (airdrop.name || '').toLowerCase();
+    const blocked = CONFIG.blockedKeywords.some(kw => name.includes(kw));
+    if (blocked) {
+      console.log(`   🚫 Filtered by BLOCKED_KEYWORDS: ${airdrop.name}`);
+      return false;
+    }
+  }
+
+  // Check MIN_REWARD (for offers: parse $ value)
+  if (CONFIG.minReward > 0 && airdrop.reward) {
+    const match = airdrop.reward.match(/\$(\d+)/);
+    if (match) {
+      const rewardValue = parseInt(match[1]);
+      if (rewardValue < CONFIG.minReward) {
+        console.log(`   🚫 Filtered by MIN_REWARD: ${airdrop.name} ($${rewardValue} < $${CONFIG.minReward})`);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+// Check Instant Offer passes custom filter
+function passesOfferFilter(offer) {
+  if (CONFIG.allowedTypes && CONFIG.allowedTypes.length > 0) {
+    const type = (offer.type || '').toLowerCase();
+    const matches = CONFIG.allowedTypes.some(allowed => type.includes(allowed));
+    if (!matches) {
+      console.log(`   🚫 Offer filtered by ALLOWED_TYPES: ${offer.name} (${offer.type})`);
+      return false;
+    }
+  }
+  if (CONFIG.allowedChains && CONFIG.allowedChains.length > 0) {
+    const chains = (offer.chains || []).map(c => (c || '').toLowerCase());
+    const matches = CONFIG.allowedChains.some(allowed => 
+      chains.some(c => c.includes(allowed) || allowed === 'multiple')
+    );
+    if (!matches) {
+      console.log(`   🚫 Offer filtered by ALLOWED_CHAINS: ${offer.name}`);
+      return false;
+    }
+  }
+  if (CONFIG.blockedKeywords && CONFIG.blockedKeywords.length > 0) {
+    const name = (offer.name || '').toLowerCase();
+    if (CONFIG.blockedKeywords.some(kw => name.includes(kw))) {
+      console.log(`   🚫 Offer filtered by BLOCKED_KEYWORDS: ${offer.name}`);
+      return false;
+    }
+  }
+  if (CONFIG.minReward > 0 && offer.reward) {
+    const match = offer.reward.match(/\$(\d+)/);
+    if (match && parseInt(match[1]) < CONFIG.minReward) {
+      console.log(`   🚫 Offer filtered by MIN_REWARD: ${offer.name}`);
+      return false;
+    }
+  }
+  return true;
 }
 
 // Rate Limiter Wrapper
@@ -297,44 +434,96 @@ async function saveAirdrop(airdrop) {
   }
 }
 
-// Get Airdrops from DeFi Llama (with Caching)
+// Get Airdrops from DeFi Llama + More Sources (with Caching & Custom Filters)
 async function getAirdrops() {
   // Check cache first
   const cachedAirdrops = cache.get('airdrops');
   if (cachedAirdrops) {
     console.log('📦 Using cached airdrops');
-    // Filter out already claimed airdrops from cache
     const unclaimed = [];
     for (const airdrop of cachedAirdrops) {
       if (!await isClaimed(airdrop.name)) {
-        unclaimed.push(airdrop);
+        if (passesCustomFilter(airdrop)) {
+          unclaimed.push(airdrop);
+        }
       }
     }
-    console.log(`📦 ${unclaimed.length} unclaimed from cache`);
+    console.log(`📦 ${unclaimed.length} unclaimed from cache (after custom filter)`);
     return unclaimed;
   }
 
   try {
+    resetDailyStatsIfNewDay();
     console.log('🔍 Fetching airdrops...');
-    const response = await axios.get('https://api.llama.fi/protocols');
-    const protocols = response.data || [];
+    
+    let protocols = [];
+    
+    if (CONFIG.enableMoreSources) {
+      console.log('📡 Using MORE SOURCES mode (DeFi Llama + CoinGecko + Galxe + Layer3 + Alert Sites)');
+      const allAirdrops = await getAllAirdrops();
+      // Convert allAirdrops to protocol-like objects for filtering
+      // For DeFi Llama items we enrich, for others we use as-is
+      protocols = allAirdrops.map(a => ({
+        name: a.name,
+        slug: a.slug || a.name.toLowerCase().replace(/\s+/g, '-'),
+        url: a.url,
+        chains: a.chains || [a.chain],
+        tvl: a.tvl || 500000, // default for quest/trending sources
+        category: a.category || a.type || 'DeFi',
+        source: a.source,
+        type: a.type,
+        links: a.links || null,
+        address: a.address || null,
+      }));
+      dailyStats.sourcesUsed = [...new Set(allAirdrops.map(a => a.source))];
+      console.log(`📊 Aggregated ${protocols.length} items from all sources`);
+    } else {
+      console.log('📡 Using DeFi Llama only (ENABLE_MORE_SOURCES=false)');
+      const response = await axios.get('https://api.llama.fi/protocols');
+      protocols = response.data || [];
+      dailyStats.sourcesUsed = ['defillama'];
+    }
 
     const airdrops = [];
     let count = 0;
+    let scanned = 0;
 
     for (const protocol of protocols) {
-      // Filter conditions
-      if (!protocol.tvl || protocol.tvl < 100000) continue;
+      scanned++;
+      // TVL filter (use custom MIN_TVL)
+      if (protocol.tvl && protocol.tvl < CONFIG.minTvl) continue;
+      if (!protocol.tvl && CONFIG.minTvl > 100000) {
+        // Skip TVL check for quest/trending sources (they have tvl 0)
+        if (protocol.source === 'defillama') continue;
+      }
       if (isIndianProject(protocol.name)) {
         console.log(`🚫 Blocked Indian project: ${protocol.name}`);
+        dailyStats.blocked++;
         continue;
       }
       if (await isInBlacklist(protocol.name)) {
         console.log(`🚫 Blacklisted project: ${protocol.name}`);
+        dailyStats.blocked++;
         continue;
       }
       if (await isClaimed(protocol.name)) {
         console.log(`✅ Already claimed: ${protocol.name}`);
+        dailyStats.skipped++;
+        continue;
+      }
+
+      // Custom filter check
+      const tempAirdrop = {
+        name: protocol.name,
+        chain: protocol.chains ? protocol.chains[0] : protocol.chain || 'Ethereum',
+        chains: protocol.chains || [protocol.chain],
+        tvl: protocol.tvl,
+        category: protocol.category,
+        type: protocol.type,
+        reward: protocol.reward || null,
+      };
+      if (!passesCustomFilter(tempAirdrop)) {
+        dailyStats.skipped++;
         continue;
       }
 
@@ -344,21 +533,24 @@ async function getAirdrops() {
       // Smart contract check
       const contractCheck = await checkSmartContract(
         protocol.address,
-        protocol.chains?.[0]
+        protocol.chains?.[0] || protocol.chain
       );
 
       // Team background check
       const teamCheck = await checkTeamBackground(protocol);
 
       // Profit calculation
-      const profit = calculateProfit(protocol.tvl, protocol.category);
+      const profit = calculateProfit(protocol.tvl || 500000, protocol.category);
 
       airdrops.push({
         name: protocol.name,
-        chain: protocol.chains ? protocol.chains[0] : 'Ethereum',
-        tvl: protocol.tvl,
-        category: protocol.category,
+        chain: protocol.chains ? protocol.chains[0] : protocol.chain || 'Ethereum',
+        chains: protocol.chains || [protocol.chain],
+        tvl: protocol.tvl || 500000,
+        category: protocol.category || 'DeFi',
         url: protocol.url || `https://defillama.com/protocol/${protocol.slug}`,
+        source: protocol.source || 'defillama',
+        type: protocol.type || 'protocol',
         socialLinks,
         contractCheck,
         teamCheck,
@@ -370,10 +562,13 @@ async function getAirdrops() {
       if (count >= 10) break;
     }
 
+    dailyStats.scanned += scanned;
+    dailyStats.verified += airdrops.length;
+
     // Cache for 10 minutes
     cache.set('airdrops', airdrops, 600);
 
-    console.log(`✅ Found ${airdrops.length} airdrops`);
+    console.log(`✅ Found ${airdrops.length} airdrops (scanned ${scanned}, sources: ${dailyStats.sourcesUsed.join(', ')})`);
     return airdrops;
   } catch (error) {
     console.error('❌ Fetch error:', error.message);
@@ -486,6 +681,55 @@ function getCountry(chain) {
   return chainCountries[chain] || 'Global (Unknown)';
 }
 
+// Format Daily Summary Message
+function formatDailySummary() {
+  resetDailyStatsIfNewDay();
+  const uptimeHours = Math.round((new Date() - dailyStats.startTime) / (1000 * 60 * 60));
+  const queueSize = postQueue.length;
+  const sentCount = sentPosts.size;
+  
+  let message = `📊 <b>DAILY SUMMARY</b> - ${dailyStats.date}\n\n`;
+  
+  message += `🔍 <b>Scanned:</b> ${dailyStats.scanned} projects\n`;
+  message += `✅ <b>Verified:</b> ${dailyStats.verified} airdrops\n`;
+  message += `📥 <b>Queued:</b> ${dailyStats.queued} posts\n`;
+  message += `📤 <b>Sent:</b> ${dailyStats.sent} posts (Total sent: ${sentCount})\n`;
+  message += `🚫 <b>Blocked:</b> ${dailyStats.blocked} (Indian/Blacklist)\n`;
+  message += `⏭️ <b>Skipped:</b> ${dailyStats.skipped} (claimed/filtered)\n`;
+  message += `📋 <b>Queue:</b> ${queueSize} remaining\n\n`;
+  
+  message += `📡 <b>Sources:</b> ${dailyStats.sourcesUsed.length > 0 ? dailyStats.sourcesUsed.join(', ') : 'DeFi Llama'}\n`;
+  message += `⏰ <b>Uptime:</b> ${uptimeHours}h\n`;
+  message += `⚙️ <b>Filters:</b> TVL ≥ $${CONFIG.minTvl.toLocaleString()}`;
+  if (CONFIG.allowedChains) message += ` | Chains: ${CONFIG.allowedChains.join(',')}`;
+  if (CONFIG.allowedTypes) message += ` | Types: ${CONFIG.allowedTypes.join(',')}`;
+  if (CONFIG.minReward > 0) message += ` | Min Reward: $${CONFIG.minReward}`;
+  message += `\n`;
+  message += `🔄 <b>More Sources:</b> ${CONFIG.enableMoreSources ? 'ON' : 'OFF'}\n\n`;
+  
+  if (queueSize === 0 && dailyStats.verified === 0) {
+    message += `💤 No new airdrops today - bot is watching 24/7!`;
+  } else if (queueSize > 0) {
+    message += `⏳ ${queueSize} posts will be sent one-by-one (5 min interval)`;
+  } else {
+    message += `✅ All caught up! Next scan in 5 minutes`;
+  }
+  
+  return message;
+}
+
+// Send Daily Summary
+async function sendDailySummary() {
+  if (!CONFIG.dailySummaryEnabled) {
+    console.log('📊 Daily summary disabled (DAILY_SUMMARY_ENABLED=false)');
+    return;
+  }
+  console.log('\n📊 Sending Daily Summary...');
+  const message = formatDailySummary();
+  await sendTelegram(message);
+  console.log('✅ Daily summary sent!');
+}
+
 // Format Single Airdrop Post (Simple & Clean)
 function formatAirdropPost(airdrop) {
   const socialLinks = airdrop.socialLinks;
@@ -500,7 +744,7 @@ function formatAirdropPost(airdrop) {
   message += `🌍 Country: ${country}\n`;
   message += `💰 TVL: $${Math.round(airdrop.tvl).toLocaleString()}\n`;
   message += `📊 Category: ${airdrop.category || 'DeFi'}\n`;
-  message += `📡 Source: DeFi Llama\n\n`;
+  message += `📡 Source: ${airdrop.source ? airdrop.source.charAt(0).toUpperCase() + airdrop.source.slice(1) : 'DeFi Llama'}\n\n`;
 
   message += `📱 <b>Links:</b>\n`;
   if (socialLinks.website) {
@@ -538,6 +782,7 @@ let isProcessingQueue = false;
 // Add to Queue
 function addToQueue(type, data) {
   postQueue.push({ type, data });
+  dailyStats.queued++;
   console.log(`📥 Added to queue: ${data.name} (Queue size: ${postQueue.length})`);
 }
 
@@ -572,6 +817,7 @@ async function processQueue() {
 
     if (sent) {
       sentPosts.add(postKey);
+      dailyStats.sent++;
       await markClaimed(item.data.name, { type: item.type });
     }
 
@@ -613,13 +859,20 @@ async function scanAirdrops() {
       }
     }
 
-    // Scan instant offers
+    // Scan instant offers (with custom filter)
     const instantOffers = await getInstantOffers();
     if (instantOffers.length > 0) {
-      console.log(`\n🎁 Found ${instantOffers.length} instant offers`);
+      console.log(`\n🎁 Found ${instantOffers.length} instant offers (before filter)`);
+      let filteredOffers = 0;
       for (const offer of instantOffers) {
+        if (!passesOfferFilter(offer)) {
+          dailyStats.skipped++;
+          continue;
+        }
+        filteredOffers++;
         addToQueue('offer', offer);
       }
+      console.log(`🎁 ${filteredOffers}/${instantOffers.length} offers passed custom filter`);
     }
 
     if (airdrops.length === 0 && instantOffers.length === 0) {
@@ -627,7 +880,7 @@ async function scanAirdrops() {
       // Don't send any message - only post when there's something to share
     }
 
-    console.log(`📊 Queue size: ${postQueue.length}`);
+    console.log(`📊 Queue size: ${postQueue.length} | Daily Stats: scanned=${dailyStats.scanned} verified=${dailyStats.verified} queued=${dailyStats.queued} sent=${dailyStats.sent}`);
   } catch (error) {
     console.error('❌ Scan error:', error.message);
   } finally {
@@ -645,6 +898,14 @@ async function startBot() {
   console.log('🇮🇳 Indian projects: BLOCKED');
   console.log('📤 Mode: One-by-One Posts (5 min interval)');
   console.log('🗄️ Database: ' + (CONFIG.mongodbUri ? 'MongoDB' : 'Memory'));
+  console.log('⚙️ Custom Filters:');
+  console.log(`   MIN_TVL: $${CONFIG.minTvl.toLocaleString()}`);
+  console.log(`   ALLOWED_CHAINS: ${CONFIG.allowedChains ? CONFIG.allowedChains.join(', ') : 'ALL'}`);
+  console.log(`   ALLOWED_TYPES: ${CONFIG.allowedTypes ? CONFIG.allowedTypes.join(', ') : 'ALL'}`);
+  console.log(`   MIN_REWARD: $${CONFIG.minReward}`);
+  console.log(`   BLOCKED_KEYWORDS: ${CONFIG.blockedKeywords.length > 0 ? CONFIG.blockedKeywords.join(', ') : 'NONE'}`);
+  console.log(`   MORE_SOURCES: ${CONFIG.enableMoreSources ? 'ENABLED (6 sources)' : 'DISABLED (DeFi Llama only)'}`);
+  console.log(`   DAILY_SUMMARY: ${CONFIG.dailySummaryEnabled ? `ENABLED at ${CONFIG.dailySummaryTime} Asia/Dhaka` : 'DISABLED'}`);
 
   // Connect to database
   await connectDB();
@@ -654,6 +915,17 @@ async function startBot() {
     scheduled: true,
     timezone: "Asia/Dhaka"
   });
+
+  // Schedule Daily Summary
+  if (CONFIG.dailySummaryEnabled) {
+    const [hour, minute] = CONFIG.dailySummaryTime.split(':').map(Number);
+    const cronTime = `${minute} ${hour} * * *`;
+    cron.schedule(cronTime, sendDailySummary, {
+      scheduled: true,
+      timezone: "Asia/Dhaka"
+    });
+    console.log(`📊 Daily Summary scheduled at ${CONFIG.dailySummaryTime} Asia/Dhaka (cron: ${cronTime})`);
+  }
 
   // Run first scan after 30 seconds
   setTimeout(() => {
