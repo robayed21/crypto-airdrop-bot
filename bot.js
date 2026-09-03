@@ -111,32 +111,22 @@ async function sendTelegram(message) {
   }
 }
 
-// Get Social Links for Project
+// Get Social Links for Project (Real links only from API)
 async function getSocialLinks(protocol) {
   const links = {
-    website: protocol.url || '#',
+    website: protocol.url || null,
     twitter: null,
     discord: null,
     telegram: null,
     github: null,
   };
 
+  // Only use REAL links from DeFi Llama API
   if (protocol.links) {
     if (protocol.links.twitter) links.twitter = protocol.links.twitter;
     if (protocol.links.discord) links.discord = protocol.links.discord;
     if (protocol.links.telegram) links.telegram = protocol.links.telegram;
     if (protocol.links.github) links.github = protocol.links.github;
-  }
-
-  try {
-    const website = protocol.url;
-    if (website) {
-      if (!links.twitter) links.twitter = `https://twitter.com/${protocol.name.toLowerCase().replace(/\s+/g, '')}`;
-      if (!links.discord) links.discord = `https://discord.gg/${protocol.name.toLowerCase().replace(/\s+/g, '')}`;
-      if (!links.telegram) links.telegram = `https://t.me/${protocol.name.toLowerCase().replace(/\s+/g, '')}`;
-    }
-  } catch (e) {
-    // Skip
   }
 
   return links;
